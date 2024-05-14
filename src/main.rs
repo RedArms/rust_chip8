@@ -119,36 +119,66 @@ impl CPU {
              }
              8=>{
                 instruction = getXBytes(4, opcode);
+                let yvalue = *self.getXreg(x3);
+                let xvalue = *self.getXreg(x2);
+                
                 match instruction {
                     0=>{
-                        let yvalue = *self.getXreg(x3);
                         self.setXreg(x2, yvalue);
                     },
                     1=>{
-
+                        self.setXreg(x2, xvalue | yvalue);
+                    },
+                    2=>{
+                        self.setXreg(x2, xvalue & yvalue);
+                    },
+                    3=>{
+                        self.setXreg(x2, xvalue ^ yvalue);
+                    },
+                    4=>{
+                        let(res,over) = xvalue.overflowing_add(yvalue);
+                        if over {
+                            self.setXreg(0xF, 0x1)
+                        }
+                        self.setXreg(x2, res);
+                    },
+                    5=>{
+                        let(res,over) = xvalue.overflowing_sub(yvalue);
+                        if over {
+                            self.setXreg(0xF, 0x0)
+                        }else {
+                            self.setXreg(0xF, 0x1)
+                        }
+                        self.setXreg(x2, res);
+                    },
+                    6=>{
+                        self.setXreg(0xF, yvalue & 0b0000_0001);
+                        self.setXreg(x2, yvalue>>1);
+                    },
+                    7=>{
+                        let(res,over) = yvalue.overflowing_sub(xvalue);
+                        if over {
+                            self.setXreg(0xF, 0x0)
+                        }else {
+                            self.setXreg(0xF, 0x1)
+                        }
+                        self.setXreg(x2, res);
+                    },
+                    0xE=>{
+                        self.setXreg(0xF, yvalue & 0b1000_0000);
+                        self.setXreg(x2, yvalue<<1);
+                    },
+                    _=>print!("he")
                     }
 
-                    _=>print!("y'a rien")
-                }
-             }
-            
-
-            //0x0001=>self.PC = opcode & 0b0000_1111_1111_1111, //0x1NNN & 0x0FFFF => 0xNNN
-            //0x0002=>print!(""),
-            //0x0003=>{
-            //},
-            //0x0005=>{
-//
-            //},
-            //0x0006=>{
-            //    self.setXreg(self.getXBytes(2, opcode), (opcode & 0b0000_0000_1111_1111) as u8)
-            //}
-            //
-            _ => print!("ya rien ")
+                },
+             0xA=>{
+                self.I = x234;
+             },
+             
+                _=>print!("y'a rien")
+            }
         }
+            
+            
     }
-
-
-
-    
-}
