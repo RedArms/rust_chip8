@@ -54,7 +54,7 @@ struct CPU{
     DT:u8,
     ST:u8,
     keys:[bool;0xF],
-    STACK:VecDeque<u16>,
+    STACK:[u16;16],
     RAM:[u8; 4095],
     SCREEN:[[bool;64];32]
 }
@@ -82,9 +82,9 @@ impl CPU {
                     ];
 
     fn init() -> CPU{
-        let mut cpu = CPU { v0: 0, v1: 0, v2: 0, v3: 0, v4: 0, v5: 0, v6: 0, v7: 0, v8: 0, v9: 0, vA: 0, vB: 0, vC: 0, vD: 0, vE: 0, vF: 0, I: 0, PC: 0, SP: 0, STACK: VecDeque::new(), RAM: [0;4095], SCREEN: [[false;64];32], DT: 0 ,ST: 0, keys:[false;0xF] };
-        for i in 0..80 {
-            cpu.RAM[i] = CPU::FONT[i];
+        let mut cpu = CPU { v0: 0, v1: 0, v2: 0, v3: 0, v4: 0, v5: 0, v6: 0, v7: 0, v8: 0, v9: 0, vA: 0, vB: 0, vC: 0, vD: 0, vE: 0, vF: 0, I: 0, PC: 0, SP: 0, STACK: [0;16], RAM: [0;4095], SCREEN: [[false;64];32], DT: 0 ,ST: 0, keys:[false;0xF] };
+        for i in 0x50..0xA0 {
+            cpu.RAM[i] = CPU::FONT[i-0x50];
         }
         return cpu;
     }
@@ -103,7 +103,7 @@ impl CPU {
             .map(|chunk| u16::from_be_bytes(chunk.try_into().unwrap()))
             .collect();
 
-        for (i,el) in contents.iter().enumerate() {           
+        for (i,el) in contents.iter().enumerate() {    
             self.RAM[0x200+i] = *el;
         }
         self.PC = 0x200;
@@ -112,7 +112,7 @@ impl CPU {
             let nextop = (self.RAM[self.PC as usize] as u16) <<8 | (self.RAM[(self.PC + 1) as usize] as u16);
             println!("opcode : {:#04x} from RAM[{:#04x}]",nextop,self.PC);
             self.printScreen();
-            thread::sleep(time::Duration::from_millis(20));
+            thread::sleep(time::Duration::from_millis(70));
             self.execute(nextop);
             self.PC +=2;
             if self.DT > 0 {
@@ -213,9 +213,9 @@ impl CPU {
                         self.SCREEN = [[false;64];32];
                     }
                     else {
-                        print!("{}", self.SP);
-                        self.PC = self.STACK.pop_front().unwrap();
-                        self.SP.checked_sub(2);
+                        self.SP -=1;
+                        self.PC = self.STACK[(self.SP) as usize];
+                        self.PC -=2;
                     }
                 }
                 else {
@@ -223,11 +223,16 @@ impl CPU {
                 }
              },
              2=>{
-                print!("here");
-                 self.STACK.push_front(self.PC);
+                 self.STACK[self.SP as usize] = self.PC;
                  self.PC = x234;
+                 self.PC -=2;
+                 self.SP +=1;
              }
-             1=>self.PC = opcode & 0b0000_1111_1111_1111,
+             1=> { 
+                self.PC = x234;
+                self.PC -=2;
+
+            },
              
              3=>{
                 if *self.getXreg(x2) == x34 {
@@ -316,16 +321,17 @@ impl CPU {
              },
              0xB=>{
                 self.PC = *self.getXreg(0) as u16 + x234;
+                self.PC -=2;
              },
              0xC=>{
                 let mut rng = rand::thread_rng();
                 self.setXreg(x2, rng.gen_range(0x00..0xFF) & x34);
              },
              0xD=>{
-                for i in *self.getXreg(x3)..self.getXreg(x2)+x4 {
+                for i in *self.getXreg(x3)..self.getXreg(x3)+x4 {
                     let range = self.getXreg(x2)+8;
                     for j in *self.getXreg(x2)..range {
-                        println!(" x y {},{}", i,j);
+                        //println!(" x y {},{}", i,j);
                     
                         if self.SCREEN[(j % 32) as usize][i as usize] {
                             self.vF = 1;
@@ -336,8 +342,8 @@ impl CPU {
                         }
                     }         
                 }
+            },
 
-             },
              0xE=>{
                 if x3 == 9 {
                     if (self.keys[(*self.getXreg(x2)% 0xF ) as usize] && x3 == 9) ||
@@ -349,7 +355,7 @@ impl CPU {
              0xF=>{
                 match x34 {
                     7=>self.setXreg(x2, self.DT),
-                    0xA=>todo!(),
+                    0xA=>return,
                     0x15=>self.DT = *self.getXreg(x2),
                     0x18=>self.ST = *self.getXreg(x2),
                     0x1E=>self.I = self.I + *self.getXreg(x2) as u16,
@@ -365,7 +371,7 @@ impl CPU {
                             self.setXreg(i, self.RAM[(self.I + i as u16) as usize]);
                         }
                     },
-                    _=>todo!()
+                    _=>print!("tjrpas")
                 }
                  
              }
