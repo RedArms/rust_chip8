@@ -10,7 +10,7 @@ fn main() {
     println!("Hello, world!");
     let mut cpu = CPU::init();
 
-    cpu.start("./Puzzle.ch8".to_owned());
+    cpu.start("./c8_test.c8".to_owned());
 
     cpu.printScreen();
 }
@@ -95,6 +95,10 @@ impl CPU {
         let mut contents: Vec<u8> = Vec::new();
         let _ = file.unwrap().read_to_end(&mut contents);
 
+    if contents.len() % 2 != 0 {
+        contents.push(0);
+    }
+
         let result: Vec<u16> = contents.chunks(2)
             .map(|chunk| u16::from_be_bytes(chunk.try_into().unwrap()))
             .collect();
@@ -111,6 +115,9 @@ impl CPU {
             thread::sleep(time::Duration::from_millis(20));
             self.execute(nextop);
             self.PC +=2;
+            if self.DT > 0 {
+                self.DT -=1;
+            }
         }
 
     }
@@ -187,6 +194,7 @@ impl CPU {
     
 
     fn execute(&mut self,opcode:u16) {
+        //i know its a weird way to parse opcodes but it works so
         let mut instruction = get_xbytes(1, opcode);
         let x1   = get_xbytes(1, opcode)  as u8;
         let x2   = get_xbytes(2, opcode)  as u8;
