@@ -4,13 +4,14 @@ use rand::{self, Rng};
 use std::fs::File;
 use std::io::prelude::*;
 use std::{thread, time};
+use device_query::{DeviceQuery, DeviceState, Keycode};
 
 
 fn main() {    
     println!("Hello, world!");
     let mut cpu = CPU::init();
 
-    cpu.start("./c8_test.c8".to_owned());
+    cpu.start("./Puzzle.ch8".to_owned());
 
     cpu.printScreen();
 }
@@ -53,7 +54,7 @@ struct CPU{
     SP:u8,
     DT:u8,
     ST:u8,
-    keys:[bool;0xF],
+    keys:[bool;16],
     STACK:[u16;16],
     RAM:[u8; 4095],
     SCREEN:[[bool;64];32]
@@ -82,7 +83,7 @@ impl CPU {
                     ];
 
     fn init() -> CPU{
-        let mut cpu = CPU { v0: 0, v1: 0, v2: 0, v3: 0, v4: 0, v5: 0, v6: 0, v7: 0, v8: 0, v9: 0, vA: 0, vB: 0, vC: 0, vD: 0, vE: 0, vF: 0, I: 0, PC: 0, SP: 0, STACK: [0;16], RAM: [0;4095], SCREEN: [[false;64];32], DT: 0 ,ST: 0, keys:[false;0xF] };
+        let mut cpu = CPU { v0: 0, v1: 0, v2: 0, v3: 0, v4: 0, v5: 0, v6: 0, v7: 0, v8: 0, v9: 0, vA: 0, vB: 0, vC: 0, vD: 0, vE: 0, vF: 0, I: 0, PC: 0, SP: 0, STACK: [0;16], RAM: [0;4095], SCREEN: [[false;64];32], DT: 0 ,ST: 0, keys:[false;16] };
         for i in 0x50..0xA0 {
             cpu.RAM[i] = CPU::FONT[i-0x50];
         }
@@ -90,6 +91,7 @@ impl CPU {
     }
 
     fn start(&mut self,path:String) {
+        let mut device_state = DeviceState::new();
         let cpu = Self::init();
         let file = File::open(path);
         let mut contents: Vec<u8> = Vec::new();
@@ -109,10 +111,19 @@ impl CPU {
         self.PC = 0x200;
 
         while true {
+
+            self.keys = [false;16];
+            device_state = DeviceState::new();
+            let keys: Vec<Keycode> = device_state.get_keys();
+            for key in keys.iter() {
+                self.keys[self.keyToIndex(*key)] = true;
+                println!("Pressed key: {:?}", key);
+            }
+
             let nextop = (self.RAM[self.PC as usize] as u16) << 8 | (self.RAM[(self.PC + 1) as usize] as u16);
             println!("opcode : {:#04x} from RAM[{:#04x}]",nextop,self.PC);
             self.printScreen();
-            thread::sleep(time::Duration::from_millis(70));
+            thread::sleep(time::Duration::from_millis(16));
             self.execute(nextop);
             self.PC +=2;
             if self.DT > 0 {
@@ -192,8 +203,34 @@ impl CPU {
 
         return ret;
     }
-    
 
+    fn keyToIndex(&self,key:Keycode) -> usize {
+
+        match key {
+            Keycode::Key1=>{return 1},
+            Keycode::Key2=>{return 2},
+            Keycode::Key3=>{return 3},
+            Keycode::Key4=>{return 0xC},
+
+            Keycode::A=>   {return 4},
+            Keycode::Z=>   {return 5},
+            Keycode::E=>   {return 6},
+            Keycode::R=>   {return 0xD},
+
+            Keycode::Q=>   {return 7},
+            Keycode::S=>   {return 8},
+            Keycode::D=>   {return 9},
+            Keycode::F=>   {return 0xE},
+
+            Keycode::W=>   {return 0xA},
+            Keycode::X=>   {return 0},
+            Keycode::C=>   {return 0xB},
+            Keycode::V=>   {return 0xF},
+            _=>return 0xFF
+        }
+
+    }
+    
     fn execute(&mut self,opcode:u16) {
         //i know its a weird way to parse opcodes but it works so
         let mut instruction = get_xbytes(1, opcode);
@@ -313,7 +350,7 @@ impl CPU {
                         self.setXreg(0xF, yvalue & 0b1000_0000);
                         self.setXreg(x2, yvalue<<1);
                     },
-                    _=>print!("he")
+                    _=>print!("Unknown instruction")
                     }
 
                 },
@@ -341,20 +378,15 @@ impl CPU {
                 //DRW Vx, Vy, nibble Dxyn
                 for i in 0..x4 {
                     for j in 0..8 {
-                           self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize]
-                         = self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize] ^ ((self.RAM[(self.I + i as u16) as usize] & 1<<7-j) > 0);
-                    
-                        //if self.SCREEN[((self.getXreg(x2) + j) % 32) as usize][(*self.getXreg(x3)+i) as usize] {
-                        //    self.vF = 1;
-                        //    self.SCREEN[((self.getXreg(x2) + j) % 32) as usize][(*self.getXreg(x3)+i) as usize] = false;
-                        //}
-                        //else {
-                        //    self.SCREEN[((self.getXreg(x2) + j) % 32) as usize][(*self.getXreg(x3)+i) as usize] = true;
-                        //}
+                        //okay so we have to XOR the screen[x][y] and I. so we take I, and it with 1<<7-j (to transforme it in 1 only bit on j pos) 
+                        //then we check if it bigger than 0 to transform any bit into bool and then XOR it with screen[x][y]
+                        //idk if it optimized but thats how i see this :O 
+                        self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize]
+                         = self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize] 
+                         ^ ((self.RAM[(self.I + i as u16) as usize] & 1<<7-j) > 0);
                     }         
                 }
             },
-
              0xE=>{
                     if (self.keys[(*self.getXreg(x2)% 0xF ) as usize] && x3 == 9) ||
                         (!self.keys[(*self.getXreg(x2)% 0xF ) as usize] && x3 != 9){
@@ -366,13 +398,16 @@ impl CPU {
                     7=>self.setXreg(x2, self.DT),
                     0xA=>{
                         //LD Vx, K Fx0A
+
+                        let device_state = DeviceState::new();
                         let mut key = 0;
-                        for i in 0..0xF {
-                            if self.keys[i] {
-                                key = i;
+                        loop {
+                            let keys = device_state.get_keys();
+                            if !keys.is_empty() {
+                                println!("Pressed key: {:?}", *keys.first().unwrap());
+                                self.keys[self.keyToIndex(*keys.first().unwrap())] = true;
                                 break;
                             }
-                        
                         }
                         self.setXreg(x2, key as u8);
 
