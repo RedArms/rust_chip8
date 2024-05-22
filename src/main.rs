@@ -10,7 +10,7 @@ fn main() {
     println!("Hello, world!");
     let mut cpu = CPU::init();
 
-    cpu.start("./IBM.ch8".to_owned());
+    cpu.start("./c8_test.c8".to_owned());
 
     cpu.printScreen();
 }
@@ -338,12 +338,9 @@ impl CPU {
                 self.setXreg(x2, rng.gen_range(0x00..0xFF) & x34);
              },
              0xD=>{
-                self.print_ERROR();
-
                 //DRW Vx, Vy, nibble Dxyn
                 for i in 0..x4 {
                     for j in 0..8 {
-                        println!(" x y {},{}", i,j);
                            self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize]
                          = self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize] ^ ((self.RAM[(self.I + i as u16) as usize] & 1<<7-j) > 0);
                     
