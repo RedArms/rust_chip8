@@ -11,7 +11,7 @@ fn main() {
     println!("Hello, world!");
     let mut cpu = CPU::init();
 
-    cpu.start("./Puzzle.ch8".to_owned());
+    cpu.start("./SpaceInvaders.ch8".to_owned());
 
     cpu.printScreen();
 }
@@ -123,7 +123,7 @@ impl CPU {
             let nextop = (self.RAM[self.PC as usize] as u16) << 8 | (self.RAM[(self.PC + 1) as usize] as u16);
             println!("opcode : {:#04x} from RAM[{:#04x}]",nextop,self.PC);
             self.printScreen();
-            thread::sleep(time::Duration::from_millis(16));
+            thread::sleep(time::Duration::from_millis(6));
             self.execute(nextop);
             self.PC +=2;
             if self.DT > 0 {
