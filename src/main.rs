@@ -10,7 +10,7 @@ fn main() {
     println!("Hello, world!");
     let mut cpu = CPU::init();
 
-    cpu.start("./c8_test.c8".to_owned());
+    cpu.start("./IBM.ch8".to_owned());
 
     cpu.printScreen();
 }
@@ -109,7 +109,7 @@ impl CPU {
         self.PC = 0x200;
 
         while true {
-            let nextop = (self.RAM[self.PC as usize] as u16) <<8 | (self.RAM[(self.PC + 1) as usize] as u16);
+            let nextop = (self.RAM[self.PC as usize] as u16) << 8 | (self.RAM[(self.PC + 1) as usize] as u16);
             println!("opcode : {:#04x} from RAM[{:#04x}]",nextop,self.PC);
             self.printScreen();
             thread::sleep(time::Duration::from_millis(70));
@@ -171,7 +171,8 @@ impl CPU {
     }
 
     fn registersList(&self) -> [&u8; 16] {
-        let ret: [&u8; 16] = [&self.v0,
+        let ret: [&u8; 16] = [
+        &self.v0,
         &self.v1,
         &self.v2,
         &self.v3,
@@ -196,7 +197,6 @@ impl CPU {
     fn execute(&mut self,opcode:u16) {
         //i know its a weird way to parse opcodes but it works so
         let mut instruction = get_xbytes(1, opcode);
-        let x1   = get_xbytes(1, opcode)  as u8;
         let x2   = get_xbytes(2, opcode)  as u8;
         let x3   = get_xbytes(3, opcode)  as u8;
         let x4   = get_xbytes(4, opcode)  as u8;
@@ -215,45 +215,51 @@ impl CPU {
                     else {
                         self.SP -=1;
                         self.PC = self.STACK[(self.SP) as usize];
-                        self.PC -=2;
+                        //self.PC -=2;
                     }
                 }
                 else {
                     //SYS addr 0nnn
                 }
              },
-             2=>{
-                 self.STACK[self.SP as usize] = self.PC;
-                 self.PC = x234;
-                 self.PC -=2;
-                 self.SP +=1;
-             }
              1=> { 
+                //JP addr 1nnn
                 self.PC = x234;
                 self.PC -=2;
 
             },
-             
+             2=>{
+                //CALL addr 2nnn
+                 self.STACK[self.SP as usize] = self.PC;
+                 self.PC = x234;
+                 self.PC -=2;
+                 self.SP +=1;
+             }        
              3=>{
+                //SE Vx, byte 3xkk
                 if *self.getXreg(x2) == x34 {
                     self.PC +=2
                 } 
              },
              4=>{
+                //SNE Vx, byte 4xkk
                 if *self.getXreg(x2) != x34 {
                     self.PC +=2
                 } 
              },
              5=>{
+                //SE Vx, Vy 5xy0
                 if *self.getXreg(x2) == *self.getXreg(x3) {
                     self.PC +=2
                 } 
              },
              6=>{
+                //LD Vx, byte 6xkk
                 self.setXreg(x2,x34);
              },
              7=>{
-                let value = (*self.getXreg(x2) as u8).wrapping_add(x34);
+                //ADD Vx, byte 7xkk
+                let value = (*self.getXreg(x2)).wrapping_add(x34);
                 self.setXreg(x2, value);
              }
              8=>{
@@ -312,55 +318,81 @@ impl CPU {
 
                 },
              9=>{
+                //SNE Vx, Vy 9xy0
                 if *self.getXreg(x2) != *self.getXreg(x3) {
                         self.PC +=2
                 } 
              },
              0xA=>{
+                //LD I, addr Annn
                 self.I = x234;
              },
              0xB=>{
+                //JP V0, addr Bnnn
                 self.PC = *self.getXreg(0) as u16 + x234;
                 self.PC -=2;
              },
              0xC=>{
+                //RND Vx, byte Cxkk
                 let mut rng = rand::thread_rng();
                 self.setXreg(x2, rng.gen_range(0x00..0xFF) & x34);
              },
              0xD=>{
-                for i in *self.getXreg(x3)..self.getXreg(x3)+x4 {
-                    let range = self.getXreg(x2)+8;
-                    for j in *self.getXreg(x2)..range {
-                        //println!(" x y {},{}", i,j);
+                self.print_ERROR();
+
+                //DRW Vx, Vy, nibble Dxyn
+                for i in 0..x4 {
+                    for j in 0..8 {
+                        println!(" x y {},{}", i,j);
+                           self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize]
+                         = self.SCREEN[((*self.getXreg(x3)+i) % 32) as usize][((self.getXreg(x2) + j) % 64) as usize] ^ ((self.RAM[(self.I + i as u16) as usize] & 1<<7-j) > 0);
                     
-                        if self.SCREEN[(j % 32) as usize][i as usize] {
-                            self.vF = 1;
-                            self.SCREEN[(j % 32) as usize][i as usize] = false;
-                        }
-                        else {
-                            self.SCREEN[(j % 32) as usize][i as usize] = true;
-                        }
+                        //if self.SCREEN[((self.getXreg(x2) + j) % 32) as usize][(*self.getXreg(x3)+i) as usize] {
+                        //    self.vF = 1;
+                        //    self.SCREEN[((self.getXreg(x2) + j) % 32) as usize][(*self.getXreg(x3)+i) as usize] = false;
+                        //}
+                        //else {
+                        //    self.SCREEN[((self.getXreg(x2) + j) % 32) as usize][(*self.getXreg(x3)+i) as usize] = true;
+                        //}
                     }         
                 }
             },
 
              0xE=>{
-                if x3 == 9 {
                     if (self.keys[(*self.getXreg(x2)% 0xF ) as usize] && x3 == 9) ||
                         (!self.keys[(*self.getXreg(x2)% 0xF ) as usize] && x3 != 9){
                         self.PC +=2;
                     }
-                } 
              },
              0xF=>{
                 match x34 {
                     7=>self.setXreg(x2, self.DT),
-                    0xA=>return,
+                    0xA=>{
+                        //LD Vx, K Fx0A
+                        let mut key = 0;
+                        for i in 0..0xF {
+                            if self.keys[i] {
+                                key = i;
+                                break;
+                            }
+                        
+                        }
+                        self.setXreg(x2, key as u8);
+
+                    },
                     0x15=>self.DT = *self.getXreg(x2),
                     0x18=>self.ST = *self.getXreg(x2),
                     0x1E=>self.I = self.I + *self.getXreg(x2) as u16,
-                    0x29=>return,
-                    0x33=>return,
+                    0x29=>{
+                        //LD F, Vx Fx29
+                        self.I = (*self.getXreg(x2) as u16 * 5) + 0x50;
+                    },
+                    0x33=>{
+                        //LD B, Vx Fx33
+                        self.RAM[self.I as usize] = *self.getXreg(x2) / 100;
+                        self.RAM[(self.I + 1) as usize] = (*self.getXreg(x2) / 10) % 10;
+                        self.RAM[(self.I + 2) as usize] = *self.getXreg(x2) % 10;
+                    },
                     0x55=>{ 
                         for i in 0..0xF {
                             self.RAM[(self.I + i as u16) as usize] = *self.getXreg(i);   
@@ -384,24 +416,50 @@ impl CPU {
         fn print_ERROR(&self) {
             println!("Erreur !!");
             println!("All registers : ");
-            print!("V0 : {}", self.v0);
-            print!("V1 : {}", self.v1);
-            print!("V2 : {}", self.v2);
-            print!("V3 : {}", self.v3);
-            print!("V4 : {}", self.v4);
-            print!("V5 : {}", self.v5);
-            print!("V6 : {}", self.v6);
-            print!("V7 : {}", self.v7);
-            print!("V8 : {}", self.v8);
-            print!("V9 : {}", self.v9);
-            print!("VA : {}", self.vA);
-            print!("VB : {}", self.vB);
-            print!("VC : {}", self.vC);
-            print!("VD : {}", self.vD);
-            print!("VE : {}", self.vE);
-            print!("VF : {}", self.vF);
+            print!("V0 :{:#04x} ,", self.v0);
+            print!("V1 :{:#04x} ,", self.v1);
+            print!("V2 :{:#04x} ,", self.v2);
+            print!("V3 :{:#04x} ,", self.v3);
+            print!("V4 :{:#04x} ,", self.v4);
+            print!("V5 :{:#04x} ,", self.v5);
+            print!("V6 :{:#04x} ,", self.v6);
+            print!("V7 :{:#04x} ,", self.v7);
+            print!("V8 :{:#04x} ,", self.v8);
+            print!("V9 :{:#04x} ,", self.v9);
+            print!("VA :{:#04x} ,", self.vA);
+            print!("VB :{:#04x} ,", self.vB);
+            print!("VC :{:#04x} ,", self.vC);
+            print!("VD :{:#04x} ,", self.vD);
+            print!("VE :{:#04x} ,", self.vE);
+            print!("VF :{:#04x} ,", self.vF);
+
+            print!("I  :{:#04x} ,", self.I);
+            print!("PC :{:#04x} ,", self.PC);
+            print!("SP :{:#04x} ,", self.SP);
+            print!("DT :{:#04x} ,", self.DT);
+            print!("ST :{:#04x} ,", self.ST);
 
 
+            print!("Keys : ");
+            for i in self.keys {
+                print!("{},", i);
+            }
+            print!("\n");
+
+            print!("Stack : ");
+            for i in self.STACK {
+                print!("{},", i);
+            }
+            print!("\n");
+
+            print!("RAM : ");
+            for (i,el) in self.RAM.iter().enumerate() {
+                print!("{:#04x},", el);
+                if i % 0x10 == 0 {
+                    print!("\n");
+                    print!("{:#04x} : ", i);
+                }
+            }
         }
 
         fn printScreen(&mut self) {
